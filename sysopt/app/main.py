@@ -19,9 +19,9 @@ class minimum:
         # Declare other variables (should be user input or database info in future)
         chiller_cost_factor = 137.04 #SGD/kW must use database as this factor will clearly calculate capex proportionally to kW
 
-        df_chiller = pd.read_csv('./app/Chiller_profile.csv')
-        df_load = pd.read_csv('./app/Load_profile.csv')
-        df_global = pd.read_csv('./app/global_data.csv')
+        df_chiller = pd.read_csv('./Chiller_profile.csv')
+        df_load = pd.read_csv('./Load_profile.csv')
+        df_global = pd.read_csv('./global_data.csv')
 
         # df_chiller = pd.read_csv('Chiller_profile.csv')
         # df_load = pd.read_csv('Load_profile.csv')
@@ -97,7 +97,7 @@ class minimum:
 # print(best_daily.best_chiller())
 
 app = FastAPI()
-templates =  Jinja2Templates('./app/templates/')
+templates =  Jinja2Templates('./templates/')
 
 @app.post('/')
 async def handle_form(request: Request, country: str = Form(...), tin: float = Form(...), tout: float = Form(...), nominal_load: float = Form(...), safety: float = Form(...), load_profile: str = Form(...)):
