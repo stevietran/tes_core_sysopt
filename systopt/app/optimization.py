@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from scipy import integrate
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
-
+from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
 # Calculate Wet Bulb Temperature (future when we consider cooling tower)
 class wetBulbCalc:
     def __init__(self, T_ambient, relH):
@@ -33,9 +33,9 @@ class dataimport:
     def seldata(self):
         chiller_cost_factor = 137.04 #SGD/kW must use database as this factor will clearly calculate capex proportionally to kW
 
-        df_load = pd.read_csv("./files/Load_profile.csv")
-        df_global = pd.read_csv("./files/global_data.csv")
-        df_curves = pd.read_csv("./files/chiller_curves.csv")
+        df_load = pd.read_csv(load_profile_dir)
+        df_global = pd.read_csv(global_data_dir)
+        df_curves = pd.read_csv(chiller_file_dir)
 
         country_data = df_global.loc[df_global['country'] == self.country_sel]
         load_data = df_load.loc[df_load['load_type'] == self.load_sel]
@@ -292,7 +292,7 @@ class opt_mini:
         dataimp = dataimport(self.country_sel, self.load_sel).seldata()
         df_curves = dataimp['df_curves']
         country_data = dataimp['country_data']
-        load_data = dataimp['load_data']
+        load_datal = dataimp['load_data']
         chiller_cost_factor = dataimp['chiller_cost_factor']
         
         # Currency selection
@@ -304,7 +304,7 @@ class opt_mini:
         # Study the load profile and flatten for CTES
         if self.nominal_load != 0:
             oversized_chiller = safechiller(self.safety, self.nominal_load).chiller_size()
-            no_ctes_p_profile = (load_data[load_data.select_dtypes(include=['number']).columns]*oversized_chiller)
+            no_ctes_p_profile = (load_datal[load_datal.select_dtypes(include=['number']).columns]*oversized_chiller)
             
         else:
             temp = []
@@ -313,14 +313,14 @@ class opt_mini:
             else:
                 factor = 1 + (self.safety/100)
             for x in self.load_profile:
-                temp.append((x['value'])*factor)
+                temp.append(x.value*factor)
             temp = np.array(temp)
             oversized_chiller = np.max(temp)
-            no_ctes_p_profile = pd.DataFrame(temp.reshape(-1, len(temp)), columns=[x for x in load_data.select_dtypes(include=['number']).head()])
+            no_ctes_p_profile = pd.DataFrame(temp.reshape(-1, len(temp)), columns=[x for x in load_datal.select_dtypes(include=['number']).head()])
 
         no_ctes_q = areaUnder(no_ctes_p_profile.values[0]).curve()
-        flatten_ctes_p_profile = np.array([no_ctes_q/24]*25)
-        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in load_data.select_dtypes(include=['number']).head()])
+        flatten_ctes_p_profile = np.array([no_ctes_q/24]*24)
+        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in load_datal.select_dtypes(include=['number']).head()])
         ctes_discharge_hours = hoursctes(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).ctesuse()
         
         # Send to TES Optimizer
