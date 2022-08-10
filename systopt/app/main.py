@@ -1,5 +1,3 @@
-import json
-import pandas as pd
 from optimization import opt_mini
 from app.clients.webapi import api_client
 
