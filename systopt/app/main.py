@@ -1,91 +1,152 @@
-import uvicorn
-from fastapi import FastAPI, Form, Request
-from fastapi.templating import Jinja2Templates
-from support import *
+import json
+import pandas as pd
+from optimization import opt_mini
+from app.clients.webapi import api_client
 
-class opt_mini:
-    def __init__(self, country_sel, tin, tout, nominal_load, safety, load_sel, pump_power, volume_limit, working_pressure):
-        self.country_sel = country_sel
-        self.tin = tin
-        self.tout = tout
-        self.nominal_load = nominal_load
-        self.safety = safety
-        self.load_sel = load_sel
-        self.pump_power = pump_power
-        self.volume_limit = volume_limit
-        self.working_pressure = working_pressure
+id = 2
 
-    def minimize(self):
-        # Import data 
-        dataimp = dataimport(self.country_sel, self.load_sel).seldata()
-        df_curves = dataimp['df_curves']
-        country_data = dataimp['country_data']
-        load_data = dataimp['load_data']
-        chiller_cost_factor = dataimp['chiller_cost_factor']
-        
-        # Currency selection
-        currency = str(country_data['currency'].values[0])
+def test_get_token():
+    usr = 'admin@tesapi.com'
+    pwd = 'tes@dmin123'
+    res = api_client.get_token(usr, pwd)
 
-        # Oversize chiller if needed
-        oversized_chiller = safechiller(self.safety, self.nominal_load).chiller_size()
+test_get_token()
 
-        # Tariff Profile
-        tariff_profile = tariffcalc(country_data).tariffprofile()
-        
-        # Study the load profile and flatten for CTES
-        no_ctes_p_profile = (load_data[load_data.select_dtypes(include=['number']).columns]*oversized_chiller)
-        no_ctes_q = areaUnder(no_ctes_p_profile.values[0]).curve()
-        flatten_ctes_p_profile = np.array([no_ctes_q/24]*25)
-        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in no_ctes_p_profile.head()])
-        ctes_discharge_hours = hoursctes(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).ctesuse()
-        
-        # Send to TES Optimizer
-        """
-        ctes_q = chargeavail(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).unusedchiller() 
-        ctes_p = (ctes_q/(ctes_discharge_hours))
-        pump_power = self.pump_power
-        volume_limit = self.volume_limit
-        working_pressure = self.working_pressure
-        """
-        
-        # Get the chiller models and profiles
-        no_ctes_lowest_chiller_model = chillselect(df_curves, oversized_chiller).select()
-        no_ctes_chiller_profiles = chillprof(df_curves, no_ctes_lowest_chiller_model, no_ctes_p_profile).prof()
-        no_ctes_all_profiles = costingprof(tariff_profile, no_ctes_chiller_profiles).costprof()
+case_params = api_client.get_case_params(id)
 
-        ctes_lowest_chiller_model = chillselect(df_curves, flatten_ctes_p_profile.values[0].max()).select()
-        ctes_chiller_profiles = chillprof(df_curves, ctes_lowest_chiller_model, flatten_ctes_p_profile).prof()
-        ctes_all_profiles = costingprof(tariff_profile, ctes_chiller_profiles).costprof()
+params = case_params['params']
+load_data = case_params['load_data']
 
-        # Get total daily cost of setup
-        no_ctes_capex = chiller_cost_factor*oversized_chiller
-        no_ctes_daily_opex = totaldaycost(no_ctes_all_profiles).dailyopex()
-        ctes_capex = chiller_cost_factor*flatten_ctes_p_profile.values[0].max()
-        ctes_daily_opex = totaldaycost(ctes_all_profiles).dailyopex()
+country_sel = params['country_selection']
+safety = params['safety_factor']
 
-        return {'no_ctes_profiles': no_ctes_all_profiles,
-                'no_ctes_models': no_ctes_all_profiles.loc[no_ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
-                'no_ctes_CAPEX': round(no_ctes_capex, 2),
-                'no_ctes_OPEX': round(no_ctes_daily_opex, 2),
-                'ctes_profiles': ctes_all_profiles,
-                'ctes_models': ctes_all_profiles.loc[ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
-                'ctes_CAPEX': round(ctes_capex, 2),
-                'ctes_OPEX': round(ctes_daily_opex, 2),
-                'currency': currency
-                }
+pump_power = 0
+volume_limit = 0
+working_pressure = 0
 
-app = FastAPI()
-templates =  Jinja2Templates('./templates/')
+if load_data['load_type'] == 'NOMIAL':
+    load_sel = load_data['load_selection'].lower()
+    nominal_load = load_data['load_value']
+    load_profile = 0
+else:
+    load_sel = 0
+    nominal_load = 0
+    load_profile = load_data['load_profiles']
 
-@app.post('/')
-async def handle_form(request: Request, country: str = Form(...), tin: float = Form(...), tout: float = Form(...), nominal_load: float = Form(...), safety: float = Form(...), load_profile: str = Form(...), pump_power: float = Form(...), volume_limit: float = Form(...),  working_pressure: float = Form(...)):
-    result = opt_mini(country, tin, tout, nominal_load, safety, load_profile, pump_power, volume_limit, working_pressure).minimize()
-    return templates.TemplateResponse('form.html', context={'request': request, 'result': result})
+optres = opt_mini(country_sel, nominal_load, safety, load_sel, load_profile, pump_power, volume_limit, working_pressure).minimize()
 
-@app.get("/")
-async def index(request: Request):
-    result = "Input values"
-    return templates.TemplateResponse('form.html', context={'request': request, 'result': result})
+# # Organize data
+# chillers = ' '.join(list(optres['ctes_models']))
+# no_ctes_chillers = ' '.join(list(optres['no_ctes_models']))
 
-if __name__ == '__main__':
-    uvicorn.run(app, port=8000, host='0.0.0.0')
+# numchillers =  len(optres['ctes_models'])
+# no_ctes_numchillers = len(optres['no_ctes_models'])
+
+# no_str_profiles = optres['no_ctes_profiles'].drop(['model','type'], axis=1)
+
+# totalrows = len(no_str_profiles.index)
+
+# keylist = []
+# for x in range(numchillers):
+#     temp = 'value' + str(x + 1)
+#     keylist.append(temp)
+
+# keylist = (keylist*3)
+# keylist.insert(0, 'time')
+
+# cleanprof = no_str_profiles.transpose().rename_axis('time').reset_index()
+# cleanprof.iloc[0] = keylist
+# print(cleanprof)
+    
+# post_res = {
+#   "result_data": {
+#       "tes_type": "SNT",
+#       "tes_attr": {
+#           "mass": 10,
+#           "length": 200,
+#           "height": 20
+#       },
+#       "tes_op_attr": {
+#           "power": 10,
+#           "pressure": 100,
+#           "flowrate": 4            
+#       },
+#       "chiller": chillers,
+#       "chiller_no_tes": no_ctes_chillers,
+#       "capex": optres['ctes_CAPEX'],
+#       "capex_no_tes": optres['no_ctes_CAPEX'],
+#       "lcos": optres['ctes_OPEX'],
+#       "lcos_no_tes": optres['no_ctes_OPEX'],
+#       "htf": "Ar",
+#       "htf_attr": {
+#           "density": 10,
+#           "c_p": 1005           
+#       },
+#       "material": "RM-11",
+#       "material_attr": {
+#           "density": 10,
+#           "phase": "Liquid"
+#       },
+#       "cost": 1900,
+#       "run_time": 1200 
+#   },
+  
+#   "load_split_profile": [
+#       {
+#           "time": 100,
+#           "value": 0
+#       },
+#       {
+#           "time": 8,
+#           "value": 10
+#       },
+#       {
+#           "time": 16,
+#           "value": 10
+#       },
+#       {
+#           "time": 24,
+#           "value": 0
+#           "value2":0
+#       }
+#   ],
+#   "electric_split_profile": [
+#   {
+#     "time": 0,
+#     "value": 0
+#   },
+#   {
+#     "time": 8,
+#     "value": 10
+#   },
+#   {
+#     "time": 16,
+#     "value": 10
+#   },
+#   {
+#     "time": 24,
+#     "value": 0
+#   }
+# ],
+#   "cost_profile": [
+#     {
+#       "time": 0,
+#       "value": 0
+#     },
+#     {
+#       "time": 8,
+#       "value": 10
+#     },
+#     {
+#       "time": 16,
+#       "value": 10
+#     },
+#     {
+#       "time": 24,
+#       "value": 0
+#     }
+#   ]
+# }
+
+# postjob = api_client.post_result(post_res, id)
+# print(postjob)
