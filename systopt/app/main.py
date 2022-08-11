@@ -1,7 +1,8 @@
 import json
-from optimization import opt_mini
+from app.optimization import opt_mini
 from app.clients.webapi import api_client
 from app.schemas.case_pls import CaseData
+# from app.clients.m_data import M_DATA_2
 
 def get_case_data(id) -> CaseData:
     # get token
@@ -13,9 +14,10 @@ def get_case_data(id) -> CaseData:
     case_params = json.dumps(api_client.get_case_params(id))
 
     return CaseData.parse_raw(case_params)
+    # return CaseData.parse_raw(json.dumps(M_DATA_2))
 
 def main():
-    id = 3
+    id = 2
     case_data = get_case_data(id)
     load_data =case_data.load_data
 
@@ -36,9 +38,8 @@ def main():
         load_profile = load_data.load_profiles
 
     optres = opt_mini(country_sel, nominal_load, safety, load_sel, load_profile, pump_power, volume_limit, working_pressure).minimize()
-    
     return optres
 
 if __name__ == "__main__":
-    res =main()
+    res = main()
     print(res)

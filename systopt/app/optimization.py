@@ -2,7 +2,7 @@ import warnings
 import math
 import pandas as pd
 import numpy as np
-from scipy import integrate
+from scipy.integrate import trapezoid
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
 from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
 # Calculate Wet Bulb Temperature (future when we consider cooling tower)
@@ -22,7 +22,7 @@ class areaUnder:
         self.profile = profile
     
     def curve(self):
-        return float(integrate.trapezoid(self.profile))
+        return float(trapezoid(self.profile))
 
 # Import data
 class dataimport:
@@ -72,7 +72,7 @@ class chargeavail:
             else:
                 avail_charge.append(0.0)
 
-        return float(integrate.trapezoid(avail_charge))
+        return float(trapezoid(avail_charge))
 
 # Calculate number of hours discharging CTES
 class hoursctes:
@@ -99,7 +99,7 @@ class tariffcalc:
     
     def tariffprofile(self):
         tariff_profile = []
-        for i in range(0, 2500, 100):
+        for i in range(0, 2400, 100):
             if i < self.country_data['non_peak_end'].values:
                 tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
             elif (i < self.country_data['non_peak_start'].values):
@@ -144,7 +144,7 @@ class chillselect:
 
         split_power = []
         model = []
-        nlc = NonlinearConstraint(constraint1, self.oversized_chiller-0.01, self.oversized_chiller)
+        nlc = NonlinearConstraint(constraint1, self.oversized_chiller-0.05, self.oversized_chiller)
         options = {'ftol':1e-50}
         minimizer_kwargs = {'args':(self.df_curves, self.oversized_chiller), 'method':'SLSQP', 'constraints':nlc, 'bounds':bnds, 'options':options}
 
@@ -169,7 +169,7 @@ class chillselect:
                 temp = 0
             model.append(temp)
             i+=1
-        
+
         model = [i for i in model if i != 0]
         return model
 
@@ -270,10 +270,32 @@ class totaldaycost:
     
     def dailyopex(self):
         daily_cost_prof = self.profiles.loc[self.profiles['type'] == 'energy_cost']
-        daily_cost_prof = daily_cost_prof.iloc[:, 2:].apply(lambda g: integrate.trapezoid(g), axis=1)
+        daily_cost_prof = daily_cost_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1)
         total_daily_cost = daily_cost_prof.sum()
 
         return total_daily_cost
+
+# Clean Data
+class cleandata:
+    def __init__(self, models, profiles):
+        self.models = models
+        self.profiles = profiles
+
+    def clear(self):
+        nochillers = len(self.models)
+        removestr = (self.profiles.drop(['model', 'type'], axis=1)).transpose()
+
+        keylist = []
+        for x in range(nochillers):
+            temp = 'value' + str(x + 1)
+            keylist.append(temp)
+        keylistfull = keylist*3
+        typelistfull = sorted((['load_profile','electric_profile','cost_profile']*nochillers), reverse=True)
+
+        removestr.columns = pd.MultiIndex.from_arrays([typelistfull, keylistfull])
+
+        cleanprof = removestr.rename_axis('time').transpose()
+        return cleanprof
 
 # Minimize 
 class opt_mini:
@@ -333,12 +355,14 @@ class opt_mini:
         """
         
         # Get the chiller models and profiles
-        no_ctes_lowest_chiller_model = chillselect(df_curves, oversized_chiller).select()
-        no_ctes_chiller_profiles = chillprof(df_curves, no_ctes_lowest_chiller_model, no_ctes_p_profile).prof()
+        no_ctes_lowest_chiller_models = chillselect(df_curves, oversized_chiller).select()
+        no_ctes_models = ' '.join(list(no_ctes_lowest_chiller_models))
+        no_ctes_chiller_profiles = chillprof(df_curves, no_ctes_lowest_chiller_models, no_ctes_p_profile).prof()
         no_ctes_all_profiles = costingprof(tariff_profile, no_ctes_chiller_profiles).costprof()
 
-        ctes_lowest_chiller_model = chillselect(df_curves, flatten_ctes_p_profile.values[0].max()).select()
-        ctes_chiller_profiles = chillprof(df_curves, ctes_lowest_chiller_model, flatten_ctes_p_profile).prof()
+        ctes_lowest_chiller_models = chillselect(df_curves, flatten_ctes_p_profile.values[0].max()).select()
+        ctes_models = ' '.join(list(ctes_lowest_chiller_models))
+        ctes_chiller_profiles = chillprof(df_curves, ctes_lowest_chiller_models, flatten_ctes_p_profile).prof()
         ctes_all_profiles = costingprof(tariff_profile, ctes_chiller_profiles).costprof()
 
         # Get total daily cost of setup
@@ -347,12 +371,16 @@ class opt_mini:
         ctes_capex = chiller_cost_factor*flatten_ctes_p_profile.values[0].max()
         ctes_daily_opex = totaldaycost(ctes_all_profiles).dailyopex()
 
-        return {'no_ctes_profiles': no_ctes_all_profiles,
-                'no_ctes_models': no_ctes_all_profiles.loc[no_ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
+        # Clean data
+        no_ctes_clean_profiles = cleandata(no_ctes_lowest_chiller_models, no_ctes_all_profiles).clear()
+        ctes_clean_profiles = cleandata(ctes_lowest_chiller_models, ctes_all_profiles).clear()
+
+        return {'no_ctes_profiles': no_ctes_clean_profiles,
+                'no_ctes_models': no_ctes_models,
                 'no_ctes_CAPEX': round(no_ctes_capex, 2),
                 'no_ctes_OPEX': round(no_ctes_daily_opex, 2),
-                'ctes_profiles': ctes_all_profiles,
-                'ctes_models': ctes_all_profiles.loc[ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
+                'ctes_profiles': ctes_clean_profiles,
+                'ctes_models': ctes_models,
                 'ctes_CAPEX': round(ctes_capex, 2),
                 'ctes_OPEX': round(ctes_daily_opex, 2),
                 'currency': currency
