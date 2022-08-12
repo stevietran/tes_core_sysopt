@@ -5,6 +5,7 @@ import numpy as np
 from scipy.integrate import trapezoid
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
 from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
+
 # Calculate Wet Bulb Temperature (future when we consider cooling tower)
 class wetBulbCalc:
     def __init__(self, T_ambient, relH):
@@ -91,23 +92,6 @@ class hoursctes:
                 avail_charge.append(0.0)
 
         return float(avail_charge.count(0))
-
-# generate tariff profile to be used for OPEX calculations
-class tariffcalc:
-    def __init__(self, country_data):
-        self.country_data = country_data
-    
-    def tariffprofile(self):
-        tariff_profile = []
-        for i in range(0, 2400, 100):
-            if i < self.country_data['non_peak_end'].values:
-                tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
-            elif (i < self.country_data['non_peak_start'].values):
-                tariff_profile.append(float(self.country_data['peak_tariff'].values))
-            else:
-                tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
-        
-        return tariff_profile
 
 # Find Chillers
 class chillselect:
@@ -234,10 +218,10 @@ class chillprof:
                 outtype.append(hold)
                 i+=1
 
-            if x == '0':
-                temp3 = pd.DataFrame({'model': model2, 'type': 'cooling_load', str(x): split_load})
-                temp4 = pd.concat([temp3, pd.DataFrame({'model': model2, 'type': 'input_power', str(x): split_power})])
-                power_prof = pd.concat([power_prof, temp4], axis=1).round(2)
+            if x == '0' or x == '0.0':
+                temp23 = pd.DataFrame({'model': model2, 'type': 'cooling_load', str(x): split_load})
+                temp24 = pd.concat([temp23, pd.DataFrame({'model': model2, 'type': 'input_power', str(x): split_power})])
+                power_prof = pd.concat([power_prof, temp24], axis=1).round(2)
 
             else:
                 temp3 = pd.DataFrame({str(x): split_load})
@@ -247,6 +231,26 @@ class chillprof:
         power_prof = power_prof.loc[power_prof.sum(axis=1, numeric_only=True) != 0]
             
         return power_prof
+
+# generate tariff profile to be used for OPEX calculations
+class tariffcalc:
+    def __init__(self, country_data, profile):
+        self.country_data = country_data
+        self.profile = profile
+    
+    def tariffprofile(self):
+
+
+        tariff_profile = []
+        for i in self.profile:
+            if float(i) < self.country_data['non_peak_end'].values:
+                tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
+            elif (float(i) < self.country_data['non_peak_start'].values):
+                tariff_profile.append(float(self.country_data['peak_tariff'].values))
+            else:
+                tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
+        
+        return tariff_profile
 
 # Daily cost profile
 class costingprof:
@@ -319,9 +323,6 @@ class opt_mini:
         
         # Currency selection
         currency = str(country_data['currency'].values[0])
-
-        # Tariff Profile
-        tariff_profile = tariffcalc(country_data).tariffprofile()
         
         # Study the load profile and flatten for CTES
         if self.nominal_load != 0:
@@ -330,19 +331,21 @@ class opt_mini:
             
         else:
             temp = []
+            temp2 = []
             if self.safety == 0:
                 factor = 1
             else:
                 factor = 1 + (self.safety/100)
             for x in self.load_profile:
                 temp.append(x.value*factor)
+                temp2.append(str(int(x.time*100)))
             temp = np.array(temp)
             oversized_chiller = np.max(temp)
-            no_ctes_p_profile = pd.DataFrame(temp.reshape(-1, len(temp)), columns=[x for x in load_datal.select_dtypes(include=['number']).head()])
+            no_ctes_p_profile = pd.DataFrame(temp.reshape(-1, len(temp)), columns=[x for x in temp2])
 
         no_ctes_q = areaUnder(no_ctes_p_profile.values[0]).curve()
-        flatten_ctes_p_profile = np.array([no_ctes_q/24]*24)
-        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in load_datal.select_dtypes(include=['number']).head()])
+        flatten_ctes_p_profile = np.array([no_ctes_q/len(no_ctes_p_profile.columns)]*len(no_ctes_p_profile.columns))
+        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in no_ctes_p_profile.head()])
         ctes_discharge_hours = hoursctes(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).ctesuse()
         
         # Send to TES Optimizer
@@ -358,11 +361,14 @@ class opt_mini:
         no_ctes_lowest_chiller_models = chillselect(df_curves, oversized_chiller).select()
         no_ctes_models = ' '.join(list(no_ctes_lowest_chiller_models))
         no_ctes_chiller_profiles = chillprof(df_curves, no_ctes_lowest_chiller_models, no_ctes_p_profile).prof()
-        no_ctes_all_profiles = costingprof(tariff_profile, no_ctes_chiller_profiles).costprof()
 
         ctes_lowest_chiller_models = chillselect(df_curves, flatten_ctes_p_profile.values[0].max()).select()
         ctes_models = ' '.join(list(ctes_lowest_chiller_models))
         ctes_chiller_profiles = chillprof(df_curves, ctes_lowest_chiller_models, flatten_ctes_p_profile).prof()
+        
+        # Tariff Profile
+        tariff_profile = tariffcalc(country_data, no_ctes_p_profile).tariffprofile()
+        no_ctes_all_profiles = costingprof(tariff_profile, no_ctes_chiller_profiles).costprof()
         ctes_all_profiles = costingprof(tariff_profile, ctes_chiller_profiles).costprof()
 
         # Get total daily cost of setup
