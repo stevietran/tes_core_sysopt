@@ -19,7 +19,7 @@ M_DATA_2 = {
         'app': 'Cooling Peak Load Shifting',
         'accuracy_level': 'Moderate',
         'country_selection': 'Singapore',
-        'safety_factor': 20.0
+        'safety_factor': 499900.0
     },
     'load_data': {
         'load_type': 'PROFILE',
