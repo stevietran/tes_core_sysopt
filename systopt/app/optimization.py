@@ -106,16 +106,18 @@ class ctes_values:
 
         return self
 
-# CTES integration
-class ctes_optimization:
-    def __init__(self, finance, results):
-        self.finance = finance
-        self.results = results
+# # CTES integration
+# class ctes_setup:
+#     def __init__(self, finance, results):
+#         self.finance = finance
+#         self.results = results
 
-    def identify(self):
-        ctes_lcos = self.finance.lcos
-        ctes_capaex = self.finance.capex
-        p_profile = self.results.p_profile
-        chiller_lcoc = self.results.chiller_LCOC
-        chiller_capex = self.results.chiller_CAPEX
+#     def info(self):
+#         ctes_lcos = self.finance.lcos
+#         ctes_capex = self.finance.capex
+#         p_profile = self.results.p_profile
+#         chiller_lcoc = self.results.chiller_LCOC
+#         chiller_capex = self.results.chiller_CAPEX                                                                                            
 
+#         self.totalcost = ctes_lcos + ctes_capex + chiller_lcoc + chiller_capex
+#         self.newprofile = p_profile
