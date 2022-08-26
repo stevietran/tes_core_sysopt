@@ -6,6 +6,7 @@ import numpy_financial as npf
 from scipy.integrate import trapezoid
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
 from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
+from app.schemas.result_pls import ElectricSplitProfileBase
 
 # Area under curve
 class areaUnder:
@@ -287,25 +288,47 @@ class lcoc:
         return levelized_cost
 
 # Clean Data
-class cleandata:
+class cleanprofiles:
     def __init__(self, models, profiles):
         self.models = models
         self.profiles = profiles
 
     def clear(self):
         nochillers = len(self.models)
-        removestr = (self.profiles.drop(['model', 'type'], axis=1)).transpose()
+        removestr = (self.profiles.drop(['model'], axis=1))
+        removestr.set_index('type', inplace=True)
 
         keylist = []
         for x in range(nochillers):
             temp = 'value' + str(x + 1)
             keylist.append(temp)
-        keylistfull = keylist*3
-        typelistfull = sorted((['load_profile','electric_profile','cost_profile']*nochillers), reverse=True)
+        keylist.insert(0, 'time')
 
-        removestr.columns = pd.MultiIndex.from_arrays([typelistfull, keylistfull])
+        loadprofile = removestr.copy().transpose()
+        loadprofile.drop(['input_power', 'energy_cost'], axis=1, inplace=True)
+        loadprofile.reset_index(inplace=True)
+        loadprofile.set_axis(keylist, axis=1, inplace=True)
+        temp = loadprofile.iloc[:, 1:].values.tolist()
+        loadprofile.insert(1, 'value', temp)
+        loadprofile.drop(loadprofile.iloc[:, 2:], axis=1, inplace=True)
+        load_dict = loadprofile.to_dict('records')
 
-        cleanprof = removestr.rename_axis('time').transpose()
-        return cleanprof
+        electricprofile = removestr.copy().transpose()
+        electricprofile.drop(['cooling_load', 'energy_cost'], axis=1, inplace=True)
+        electricprofile.reset_index(inplace=True)
+        electricprofile.set_axis(keylist, axis=1, inplace=True)
+        temp2 = electricprofile.iloc[:, 1:].values.tolist()
+        electricprofile.insert(1, 'value', temp2)
+        electricprofile.drop(electricprofile.iloc[:, 2:], axis=1, inplace=True)
+        elect_dict = electricprofile.to_dict('records')
 
-# Handle new load profile with CTES
+        costprofile = removestr.copy().transpose()
+        costprofile.drop(['cooling_load', 'input_power'], axis=1, inplace=True)
+        costprofile.reset_index(inplace=True)
+        costprofile.set_axis(keylist, axis=1, inplace=True)
+        temp3 = costprofile.iloc[:, 1:].values.tolist()
+        costprofile.insert(1, 'value', temp3)
+        costprofile.drop(costprofile.iloc[:, 2:], axis=1, inplace=True)
+        cost_dict = costprofile.to_dict('records')
+
+        return {'load_split_profile': load_dict, 'electric_split_profile': elect_dict, 'cost_split_profile': cost_dict}

@@ -4,22 +4,6 @@ import numpy as np
 from types import SimpleNamespace
 from app.support import *
 
-# Identify data input
-class clean_input:
-    def __init__(self, load_data):
-        self.load_data = load_data
-
-    def profile(self):
-        if self.load_data.load_type == 'NOMIAL':
-            self.load_sel = self.load_data.load_selection.lower()
-            self.nominal_load = self.load_data.load_value
-            self.load_profile = 0
-        else:
-            self.load_sel = 0
-            self.nominal_load = 0
-            self.load_profile = self.load_data.load_profiles
-        return self
-
 # Chiller Minimize 
 class opt_mini:
     def __init__(self, country_sel, nominal_load, safety, load_sel, load_profile):
@@ -40,8 +24,8 @@ class opt_mini:
         # Currency selection
         currency = str(country_data['currency'].values[0])
         
-        # Study the load profile and flatten for CTES
-        if self.nominal_load != 0:
+        # Study the load profile
+        if self.nominal_load != None:
             oversized_chiller = safechiller(self.safety, self.nominal_load).chiller_size()
             p_profile = (load_datal[load_datal.select_dtypes(include=['number']).columns]*oversized_chiller)
             
@@ -63,6 +47,8 @@ class opt_mini:
         lowest_chiller_models = chillselect(df_curves, oversized_chiller).select()
         models = ' '.join(list(lowest_chiller_models))
         chiller_profiles = chillprof(df_curves, lowest_chiller_models, p_profile).prof()
+        powercalc = chiller_profiles.loc[chiller_profiles['type'] == 'input_power']
+        max_power = powercalc[powercalc.select_dtypes(include=['number']).columns].sum().max()
         
         # Tariff Profile
         tariff_profile = tariffcalc(country_data, p_profile).tariffprofile()
@@ -73,14 +59,15 @@ class opt_mini:
         chiller_lcoc = lcoc(all_profiles).cooling()
 
         # Clean data
-        clean_profiles = cleandata(lowest_chiller_models, all_profiles).clear()
+        clean_profiles = cleanprofiles(lowest_chiller_models, all_profiles).clear()
 
         res = {'chiller_profiles': clean_profiles,
                 'chiller_models': models,
                 'chiller_CAPEX': round(chiller_capex, 2),
                 'chiller_LCOC': round(chiller_lcoc, 2),
                 'currency': currency,
-                'p_profile' : p_profile
+                'p_profile': p_profile,
+                'max_power': max_power
                 }
 
         results = SimpleNamespace(**res)
@@ -106,18 +93,3 @@ class ctes_values:
 
         return self
 
-# # CTES integration
-# class ctes_setup:
-#     def __init__(self, finance, results):
-#         self.finance = finance
-#         self.results = results
-
-#     def info(self):
-#         ctes_lcos = self.finance.lcos
-#         ctes_capex = self.finance.capex
-#         p_profile = self.results.p_profile
-#         chiller_lcoc = self.results.chiller_LCOC
-#         chiller_capex = self.results.chiller_CAPEX                                                                                            
-
-#         self.totalcost = ctes_lcos + ctes_capex + chiller_lcoc + chiller_capex
-#         self.newprofile = p_profile

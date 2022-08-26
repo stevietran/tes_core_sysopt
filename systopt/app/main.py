@@ -1,10 +1,14 @@
 import json
 from types import SimpleNamespace
 
-from app.optimization import ctes_values, opt_mini, clean_input
+from app.optimization import ctes_values, opt_mini
 from app.clients.webapi import api_client
 from app.schemas.case_pls import CaseData
-from app.clients.m_data import M_DATA_2
+from app.schemas.tes_pls import TesOutput
+from app.schemas.result_pls import ResultReturn
+from app.clients.m_data import M_DATA_1
+from app.clients.m_tesresult import M_report
+from app.clients.m_result import M_DATA_RESULT
 
 from random import randint, random
 
@@ -18,92 +22,95 @@ def get_case_data(id) -> CaseData:
     # case_params = json.dumps(api_client.get_case_params(id))
 
     # return CaseData.parse_raw(case_params)
-    return CaseData.parse_raw(json.dumps(M_DATA_2))
+    return CaseData.parse_raw(json.dumps(M_DATA_1))
 
 def main():
     id = 2
     case_data = get_case_data(id)
+    params = case_data.params
     load_data = case_data.load_data
+    country_selection = case_data.params.country_selection
 
-    volume_limit = 100
-    working_pressure = 1
-
-    cleandata = clean_input(load_data).profile()
-    no_ctes_chiller_optimization = opt_mini(case_data.params.country_selection, cleandata.nominal_load, case_data.params.safety_factor, cleandata.load_sel, cleandata.load_profile).minimize()
+    # No CTES chiller optimization
+    no_ctes_chiller_optimization = opt_mini(country_selection, load_data.load_value, params.safety_factor, load_data.load_selection, load_data.load_profiles).minimize()
     
     # Calculate CTES values
-    ctes_calculation = ctes_values(no_ctes_chiller_optimization).PQ()
+    ctes_pq = ctes_values(no_ctes_chiller_optimization).PQ()
+    p_profile = ctes_pq.flatten_ctes_p_profile
 
-    # Get LCOC and capex for chillers with CTES
-    ctes_chiller_optimization = opt_mini(case_data.params.country_selection, 0, 0, 0, ctes_calculation.flatten_ctes_p_profile).minimize()
+    # CTES chiller optimization
+    ctes_chiller_optimization = opt_mini(country_selection, None, 0, 0, p_profile).minimize()
+    ctes_pump_power = 0.03 * ctes_chiller_optimization.max_power
+    
+    # TES values from user, can be hardcoded but shouldn't
+    working_pressure = 1
+    volume_limit = 100
+    T_out_dis = 5
+    T_in_charge = 3
+    
+    # Assumed calculation values
+    T_in_dis = 5#
+    T_out_charge = 5#
 
-    # Send and receive CTES values
-    M_report = SimpleNamespace(**{"tes_type": "Shell and tube",
+    # TES input values
+    tes_input = {"working_pressure": working_pressure,
+                "volume_limit": volume_limit,
+                "power_dis": ctes_pq.ctes_p,
+                "energy_dis": ctes_pq.ctes_q,
+                "power_pump": ctes_pump_power,
+                "T_in_charge": T_in_charge,
+                "T_out_charge": T_out_charge,
+                "T_in_dis": T_in_dis,
+                "T_out_dis": T_out_dis,
+                "selected_toxicity_level": "None",
+                "phase": "All",
+                "accurancy_level": "low"
+                } 
+    
+    tes_output = TesOutput.parse_raw(json.dumps(M_report))
 
-                                    "tes_attr": {
+    # TODO: Prepare data for Web backend
+    results = {"result_data": {
+                                "tes_type": tes_output.tes_type,
+                                "tes_attr": {
+                                    "mass": "help",
+                                    "length": "help",
+                                    "height": "help"
+                                },
+                                "tes_op_attr": {
+                                    "power": "help",
+                                    "pressure": "help",
+                                    "flowrate": tes_output.tes_op_attr['mdot_htf']            
+                                },
+                                "chiller": ctes_chiller_optimization.chiller_models,
+                                "chiller_no_tes": no_ctes_chiller_optimization.chiller_models,
+                                "capex": ctes_chiller_optimization.chiller_CAPEX,
+                                "capex_no_tes": no_ctes_chiller_optimization.chiller_CAPEX,
+                                "lcos": ctes_chiller_optimization.chiller_LCOC,
+                                "lcos_no_tes": no_ctes_chiller_optimization.chiller_LCOC,
+                                "htf": tes_output.htf,
+                                "htf_attr": {
+                                    "density": tes_output.htf_attr['rho_htf'],
+                                    "c_p": tes_output.htf_attr['cp_htf']           
+                                },
+                                "material": tes_output.material,
+                                "material_attr": {
+                                    "density": tes_output.material_attr['rho_pcm'],
+                                    "phase": "help"
+                                },
+                                "tes_capex": tes_output.capex,
+                                "tes_lcos": tes_output.lcos,
+                                "runtime": tes_output.runtime 
+                            },
+            "load_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['load_split_profile'],
+            "load_split_profile": ctes_chiller_optimization.chiller_profiles['load_split_profile'],
+            "electric_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
+            "electric_split_profile": ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
+            "cost_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'],
+            "cost_split_profile": ctes_chiller_optimization.chiller_profiles['cost_split_profile']
+            }
 
-                                        "len_tube": 47.48031496062993,
-
-                                        "num_tubes": 4,
-
-                                        "dia_tube": 0.07314999999999999,
-
-                                        "pitch_tube": 0.05258722385880757
-
-                                        },
-
-                                    "tes_op_attr": {
-
-                                        "mdot_htf": 0.052833813640730067,
-
-                                        "T_in_charge": -32.0,
-
-                                        "T_out_charge": -10.0,
-
-                                        "T_in_discharge": -10.0,
-
-                                        "T_out_discharge": -30.0
-
-                                        },
-
-                                    "htf": "Nitrogen",
-
-                                    "htf_attr": {
-
-                                        "rho_htf": 1.13,
-
-                                        "cp_htf": 1041.0,
-
-                                        "k_htf": 0.0259,
-
-                                        "mu_htf": 1.78e-05
-
-                                        },
-
-                                    "material": "E-22",
-
-                                    "material_attr": {
-
-                                        "rho_pcm": 1180.0,
-
-                                        "cp_pcm": 3340.0,
-
-                                        "k_pcm": 0.57
-
-                                        },
-
-                                    "runtime": 125.72702693939209,
-
-                                    "lcos": 1.5331427715425923,
-
-                                    "capex": 1818.6202707213768
-
-                                })
-
-    result = {"no_ctes_chiller_optimization":{"chiller_models": no_ctes_chiller_optimization.chiller_models, "chiller_capex": no_ctes_chiller_optimization.chiller_CAPEX, "chiller_lcoc": no_ctes_chiller_optimization.chiller_LCOC},
-            "ctes_chiller_optimization":{"chiller_models": ctes_chiller_optimization.chiller_models, "chiller_capex": ctes_chiller_optimization.chiller_CAPEX, "chiller_lcoc": ctes_chiller_optimization.chiller_LCOC, "tes_type": M_report.tes_type, "CTES_capex": M_report.capex, "CTES_lcos": M_report.lcos}}
-
-    return SimpleNamespace(**result)
+    return results
 
 if __name__ == "__main__":
     res = main()
