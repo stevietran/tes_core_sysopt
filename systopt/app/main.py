@@ -6,7 +6,7 @@ from app.clients.webapi import api_client
 from app.schemas.case_pls import CaseData
 from app.schemas.tes_pls import TesOutput
 from app.schemas.result_pls import ResultReturn
-from app.clients.m_data import M_DATA_1
+from app.clients.m_data import M_DATA_2
 from app.clients.m_tesresult import M_report
 from app.clients.m_result import M_DATA_RESULT
 
@@ -22,7 +22,7 @@ def get_case_data(id) -> CaseData:
     # case_params = json.dumps(api_client.get_case_params(id))
 
     # return CaseData.parse_raw(case_params)
-    return CaseData.parse_raw(json.dumps(M_DATA_1))
+    return CaseData.parse_raw(json.dumps(M_DATA_2))
 
 def main():
     id = 2
@@ -45,8 +45,8 @@ def main():
     # TES values from user, can be hardcoded but shouldn't
     working_pressure = 1
     volume_limit = 100
-    T_out_dis = 5
-    T_in_charge = 3
+    T_out_dis = 6.7
+    T_in_charge = T_out_dis - 2
     
     # Assumed calculation values
     T_in_dis = 5#
@@ -64,7 +64,7 @@ def main():
                 "T_out_dis": T_out_dis,
                 "selected_toxicity_level": "None",
                 "phase": "All",
-                "accurancy_level": "low"
+                "accurancy_level": params.accuracy_level
                 } 
     
     tes_output = TesOutput.parse_raw(json.dumps(M_report))
@@ -72,16 +72,8 @@ def main():
     # TODO: Prepare data for Web backend
     results = {"result_data": {
                                 "tes_type": tes_output.tes_type,
-                                "tes_attr": {
-                                    "mass": "help",
-                                    "length": "help",
-                                    "height": "help"
-                                },
-                                "tes_op_attr": {
-                                    "power": "help",
-                                    "pressure": "help",
-                                    "flowrate": tes_output.tes_op_attr['mdot_htf']            
-                                },
+                                "tes_attr": tes_output.tes_attr,
+                                "tes_op_attr": tes_output.tes_op_attr,
                                 "chiller": ctes_chiller_optimization.chiller_models,
                                 "chiller_no_tes": no_ctes_chiller_optimization.chiller_models,
                                 "capex": ctes_chiller_optimization.chiller_CAPEX,
@@ -89,15 +81,9 @@ def main():
                                 "lcos": ctes_chiller_optimization.chiller_LCOC,
                                 "lcos_no_tes": no_ctes_chiller_optimization.chiller_LCOC,
                                 "htf": tes_output.htf,
-                                "htf_attr": {
-                                    "density": tes_output.htf_attr['rho_htf'],
-                                    "c_p": tes_output.htf_attr['cp_htf']           
-                                },
+                                "htf_attr": tes_output.htf_attr,
                                 "material": tes_output.material,
-                                "material_attr": {
-                                    "density": tes_output.material_attr['rho_pcm'],
-                                    "phase": "help"
-                                },
+                                "material_attr": tes_output.material_attr,
                                 "tes_capex": tes_output.capex,
                                 "tes_lcos": tes_output.lcos,
                                 "runtime": tes_output.runtime 
