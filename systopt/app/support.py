@@ -2,7 +2,7 @@ import warnings
 import math
 import pandas as pd
 import numpy as np
-import numpy_financial as npf
+# import numpy_financial as npf
 from scipy.integrate import trapezoid
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
 from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
@@ -267,6 +267,13 @@ class costingprof:
 
 doi: 10.1016/j.egypro.2016.06.241"""
 
+def npv(rate, total_value):
+    m = len(total_value)
+    npv_value = 0
+    for i in range(m):
+        npv_value += total_value[i] / ((1 + rate) ** i)
+    return npv_value
+
 class lcoc:
     def __init__(self, profiles):
         self.profiles = profiles
@@ -277,12 +284,12 @@ class lcoc:
         daily_cost_prof = self.profiles.loc[self.profiles['type'] == 'energy_cost']
         daily_cost_prof = daily_cost_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1)
         total_annual_cost = np.array([daily_cost_prof.sum()*365]*lifetime)
-        npv_cost = npf.npv(discount_rate, total_annual_cost)
+        npv_cost = npv(discount_rate, total_annual_cost)
 
         daily_load_prof = self.profiles.loc[self.profiles['type'] == 'cooling_load']
         daily_load_prof = daily_load_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1)
         total_annual_cooling = np.array([daily_load_prof.sum()*365]*lifetime)
-        npv_cooling_load = npf.npv(discount_rate, total_annual_cooling)
+        npv_cooling_load = npv(discount_rate, total_annual_cooling)
         levelized_cost = (npv_cost/npv_cooling_load)
 
         return levelized_cost
