@@ -70,6 +70,21 @@ def main():
     tes_output = TesOutput.parse_raw(json.dumps(M_report))
 
     # TODO: Prepare data for Web backend
+    profiles = []
+    for [item_ind, item] in enumerate(no_ctes_chiller_optimization.chiller_profiles['load_split_profile']):
+        
+        profiles_dict = {}
+        profiles_dict['time'] = item['time']
+        profiles_dict['load_split_profile_no_tes'] = item['value']
+        profiles_dict['load_split_profile'] = ctes_chiller_optimization.chiller_profiles['load_split_profile'][item_ind]['value']
+        profiles_dict["electric_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
+        profiles_dict["electric_split_profile"] = ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
+        profiles_dict["cost_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
+        profiles_dict["cost_split_profile"] = ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
+
+        profiles.append(profiles_dict)
+
+
     results = {"result_data": {
                                 "tes_type": tes_output.tes_type,
                                 "tes_attr": tes_output.tes_attr,
@@ -88,14 +103,8 @@ def main():
                                 "tes_lcos": tes_output.lcos,
                                 "runtime": tes_output.runtime 
                             },
-            "load_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['load_split_profile'],
-            "load_split_profile": ctes_chiller_optimization.chiller_profiles['load_split_profile'],
-            "electric_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
-            "electric_split_profile": ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
-            "cost_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'],
-            "cost_split_profile": ctes_chiller_optimization.chiller_profiles['cost_split_profile']
-            }
-
+            "profiles": profiles
+    }
     return results
 
 if __name__ == "__main__":
