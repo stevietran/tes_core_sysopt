@@ -1,91 +1,112 @@
-import uvicorn
-from fastapi import FastAPI, Form, Request
-from fastapi.templating import Jinja2Templates
-from support import *
+import json
+from types import SimpleNamespace
 
-class opt_mini:
-    def __init__(self, country_sel, tin, tout, nominal_load, safety, load_sel, pump_power, volume_limit, working_pressure):
-        self.country_sel = country_sel
-        self.tin = tin
-        self.tout = tout
-        self.nominal_load = nominal_load
-        self.safety = safety
-        self.load_sel = load_sel
-        self.pump_power = pump_power
-        self.volume_limit = volume_limit
-        self.working_pressure = working_pressure
+from app.optimization import ctes_values, opt_mini
+from app.clients.webapi import api_client
+from app.schemas.case_pls import CaseData
+from app.schemas.tes_pls import TesOutput
+from app.schemas.result_pls import ResultReturn
+from app.clients.m_data import M_DATA_2
+from app.clients.m_tesresult import M_report
+from app.clients.m_result import M_DATA_RESULT
 
-    def minimize(self):
-        # Import data 
-        dataimp = dataimport(self.country_sel, self.load_sel).seldata()
-        df_curves = dataimp['df_curves']
-        country_data = dataimp['country_data']
-        load_data = dataimp['load_data']
-        chiller_cost_factor = dataimp['chiller_cost_factor']
+from random import randint, random
+
+def get_case_data(id) -> CaseData:
+    # get token
+    usr = 'admin@tesapi.com'
+    pwd = 'tes@dmin123'
+    # api_client.get_token(usr, pwd)
+    
+    # get data
+    # case_params = json.dumps(api_client.get_case_params(id))
+
+    # return CaseData.parse_raw(case_params)
+    return CaseData.parse_raw(json.dumps(M_DATA_2))
+
+def main():
+    id = 2
+    case_data = get_case_data(id)
+    params = case_data.params
+    load_data = case_data.load_data
+    country_selection = case_data.params.country_selection
+
+    # No CTES chiller optimization
+    no_ctes_chiller_optimization = opt_mini(country_selection, load_data.load_value, params.safety_factor, load_data.load_selection, load_data.load_profiles).minimize()
+    
+    # Calculate CTES values
+    ctes_pq = ctes_values(no_ctes_chiller_optimization).PQ()
+    p_profile = ctes_pq.flatten_ctes_p_profile
+
+    # CTES chiller optimization
+    ctes_chiller_optimization = opt_mini(country_selection, None, 0, 0, p_profile).minimize()
+    ctes_pump_power = 0.03 * ctes_chiller_optimization.max_power
+    
+    # TES values from user, can be hardcoded but shouldn't
+    working_pressure = 1
+    volume_limit = 100
+    T_out_dis = 6.7
+    T_in_charge = T_out_dis - 2
+    
+    # Assumed calculation values
+    T_in_dis = 5#
+    T_out_charge = 5#
+
+    # TES input values
+    tes_input = {"working_pressure": working_pressure,
+                "volume_limit": volume_limit,
+                "power_dis": ctes_pq.ctes_p,
+                "energy_dis": ctes_pq.ctes_q,
+                "power_pump": ctes_pump_power,
+                "T_in_charge": T_in_charge,
+                "T_out_charge": T_out_charge,
+                "T_in_dis": T_in_dis,
+                "T_out_dis": T_out_dis,
+                "selected_toxicity_level": "None",
+                "phase": "All",
+                "accurancy_level": params.accuracy_level
+                } 
+    
+    tes_output = TesOutput.parse_raw(json.dumps(M_report))
+
+    # TODO: Prepare data for Web backend
+    profiles = []
+    for [item_ind, item] in enumerate(no_ctes_chiller_optimization.chiller_profiles['load_split_profile']):
         
-        # Currency selection
-        currency = str(country_data['currency'].values[0])
+        profiles_dict = {}
+        profiles_dict['time'] = item['time']
+        profiles_dict['load_split_profile_no_tes'] = item['value']
+        profiles_dict['load_split_profile'] = ctes_chiller_optimization.chiller_profiles['load_split_profile'][item_ind]['value']
+        profiles_dict["electric_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
+        profiles_dict["electric_split_profile"] = ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
+        profiles_dict["cost_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
+        profiles_dict["cost_split_profile"] = ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
 
-        # Oversize chiller if needed
-        oversized_chiller = safechiller(self.safety, self.nominal_load).chiller_size()
+        profiles.append(profiles_dict)
 
-        # Tariff Profile
-        tariff_profile = tariffcalc(country_data).tariffprofile()
-        
-        # Study the load profile and flatten for CTES
-        no_ctes_p_profile = (load_data[load_data.select_dtypes(include=['number']).columns]*oversized_chiller)
-        no_ctes_q = areaUnder(no_ctes_p_profile.values[0]).curve()
-        flatten_ctes_p_profile = np.array([no_ctes_q/24]*25)
-        flatten_ctes_p_profile = pd.DataFrame(flatten_ctes_p_profile.reshape(-1, len(flatten_ctes_p_profile)), columns=[x for x in no_ctes_p_profile.head()])
-        ctes_discharge_hours = hoursctes(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).ctesuse()
-        
-        # Send to TES Optimizer
-        """
-        ctes_q = chargeavail(flatten_ctes_p_profile.values[0], no_ctes_p_profile.values[0]).unusedchiller() 
-        ctes_p = (ctes_q/(ctes_discharge_hours))
-        pump_power = self.pump_power
-        volume_limit = self.volume_limit
-        working_pressure = self.working_pressure
-        """
-        
-        # Get the chiller models and profiles
-        no_ctes_lowest_chiller_model = chillselect(df_curves, oversized_chiller).select()
-        no_ctes_chiller_profiles = chillprof(df_curves, no_ctes_lowest_chiller_model, no_ctes_p_profile).prof()
-        no_ctes_all_profiles = costingprof(tariff_profile, no_ctes_chiller_profiles).costprof()
 
-        ctes_lowest_chiller_model = chillselect(df_curves, flatten_ctes_p_profile.values[0].max()).select()
-        ctes_chiller_profiles = chillprof(df_curves, ctes_lowest_chiller_model, flatten_ctes_p_profile).prof()
-        ctes_all_profiles = costingprof(tariff_profile, ctes_chiller_profiles).costprof()
+    results = {"result_data": {
+                                "tes_type": tes_output.tes_type,
+                                "tes_attr": tes_output.tes_attr,
+                                "tes_op_attr": tes_output.tes_op_attr,
+                                "chiller": ctes_chiller_optimization.chiller_models,
+                                "chiller_no_tes": no_ctes_chiller_optimization.chiller_models,
+                                "capex": ctes_chiller_optimization.chiller_CAPEX,
+                                "capex_no_tes": no_ctes_chiller_optimization.chiller_CAPEX,
+                                "lcos": ctes_chiller_optimization.chiller_LCOC,
+                                "lcos_no_tes": no_ctes_chiller_optimization.chiller_LCOC,
+                                "htf": tes_output.htf,
+                                "htf_attr": tes_output.htf_attr,
+                                "material": tes_output.material,
+                                "material_attr": tes_output.material_attr,
+                                "tes_capex": tes_output.capex,
+                                "tes_lcos": tes_output.lcos,
+                                "runtime": tes_output.runtime 
+                            },
+            "profiles": profiles
+    }
+    return results
 
-        # Get total daily cost of setup
-        no_ctes_capex = chiller_cost_factor*oversized_chiller
-        no_ctes_daily_opex = totaldaycost(no_ctes_all_profiles).dailyopex()
-        ctes_capex = chiller_cost_factor*flatten_ctes_p_profile.values[0].max()
-        ctes_daily_opex = totaldaycost(ctes_all_profiles).dailyopex()
-
-        return {'no_ctes_profiles': no_ctes_all_profiles,
-                'no_ctes_models': no_ctes_all_profiles.loc[no_ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
-                'no_ctes_CAPEX': round(no_ctes_capex, 2),
-                'no_ctes_OPEX': round(no_ctes_daily_opex, 2),
-                'ctes_profiles': ctes_all_profiles,
-                'ctes_models': ctes_all_profiles.loc[ctes_all_profiles['type'] == 'cooling_load']['model'].values[:],
-                'ctes_CAPEX': round(ctes_capex, 2),
-                'ctes_OPEX': round(ctes_daily_opex, 2),
-                'currency': currency
-                }
-
-app = FastAPI()
-templates =  Jinja2Templates('./templates/')
-
-@app.post('/')
-async def handle_form(request: Request, country: str = Form(...), tin: float = Form(...), tout: float = Form(...), nominal_load: float = Form(...), safety: float = Form(...), load_profile: str = Form(...), pump_power: float = Form(...), volume_limit: float = Form(...),  working_pressure: float = Form(...)):
-    result = opt_mini(country, tin, tout, nominal_load, safety, load_profile, pump_power, volume_limit, working_pressure).minimize()
-    return templates.TemplateResponse('form.html', context={'request': request, 'result': result})
-
-@app.get("/")
-async def index(request: Request):
-    result = "Input values"
-    return templates.TemplateResponse('form.html', context={'request': request, 'result': result})
-
-if __name__ == '__main__':
-    uvicorn.run(app, port=8000, host='0.0.0.0')
+if __name__ == "__main__":
+    res = main()
+    print(res)

@@ -3,13 +3,13 @@ M_DATA_1 = {
         'app': 'Cooling Peak Load Shifting',
         'accuracy_level': 'Moderate',
         'country_selection': 'Singapore',
-        'safety_factor': 0.0
+        'safety_factor': 20.0
     },
 
     'load_data': {
         'load_type': 'NOMIAL',
         'load_selection': 'ON_HALF_PEAK',
-        'load_value': 3800.0,
+        'load_value': 5000.0,
         'load_profiles': None
     }
 }
@@ -19,7 +19,7 @@ M_DATA_2 = {
         'app': 'Cooling Peak Load Shifting',
         'accuracy_level': 'Moderate',
         'country_selection': 'Singapore',
-        'safety_factor': 599900.0
+        'safety_factor': 20.0
     },
     'load_data': {
         'load_type': 'PROFILE',

@@ -1,7 +1,7 @@
-﻿Model,cop_curve,max_cooling_load,max_power,tin_curve
-Centravac4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
-Centravac4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
-Centravac4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
-Centravac6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698
-Centravac6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698
-Centravac6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698
+﻿Model,min_temp,cop_curve,max_cooling_load,max_power,tin_curve
+Centravac4.0,4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
+Centravac4.0,4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
+Centravac4.0,4.0,-9.550021e-12*(split_load[i]**4) + 7.722695e-8*(split_load[i]**3) - 2.062518e-04*(split_load[i]**2) + 0.3314732*split_load[i],2989.45,449,0.0027*split_load[i] + 3.9964
+Centravac6.7,6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698
+Centravac6.7,6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698
+Centravac6.7,6.7,-8.16471e-12*(split_load[i]**4) + 6.8943e-8*(split_load[i]**3) - 1.920772e-4*(split_load[i]**2) + 0.3139073*split_load[i],3200.47,445.6,0.0017*split_load[i] + 6.698

@@ -11,7 +11,7 @@ M_DATA_RESULT = {
           "pressure": 100,
           "flowrate": 4            
       },
-      "chiller": "CHILLER-1",
+      "chiller": "CHILLER-1 CHILLER-2",
       "chiller_no_tes": "CHILLER-2",
       "capex": 101,
       "capex_no_tes": 10,
@@ -27,62 +27,116 @@ M_DATA_RESULT = {
           "density": 10,
           "phase": "Liquid"
       },
-      "cost": 1900,
-      "run_time": 1200 
+      "tes_capex": 1900,
+      "tes_lcos": 1.1,
+      "runtime": 1200 
   },
-  
-  "load_split_profile": [
+  "load_split_profile_no_tes": [
       {
           "time": 0,
-          "value": 0
+          "value": [0]
       },
       {
           "time": 8,
-          "value": 10
+          "value":[10]
       },
       {
           "time": 16,
-          "value": 10
+          "value": [10]
       },
       {
           "time": 24,
-          "value": 0
+          "value": [0]
+      }
+  ],
+  "load_split_profile": [
+      {
+          "time": 0,
+          "value": [0]
+      },
+      {
+          "time": 8,
+          "value":[10]
+      },
+      {
+          "time": 16,
+          "value": [10]
+      },
+      {
+          "time": 24,
+          "value": [0]
+      }
+  ],
+  "electric_split_profile_no_tes": [
+      {
+          "time": 0,
+          "value": [0]
+      },
+      {
+          "time": 8,
+          "value":[10]
+      },
+      {
+          "time": 16,
+          "value": [10]
+      },
+      {
+          "time": 24,
+          "value": [0]
       }
   ],
   "electric_split_profile": [
-  {
-    "time": 0,
-    "value": 0
-  },
-  {
-    "time": 8,
-    "value": 10
-  },
-  {
-    "time": 16,
-    "value": 10
-  },
-  {
-    "time": 24,
-    "value": 0
-  }
-],
-  "cost_profile": [
-    {
-      "time": 0,
-      "value": 0
-    },
-    {
-      "time": 8,
-      "value": 10
-    },
-    {
-      "time": 16,
-      "value": 10
-    },
-    {
-      "time": 24,
-      "value": 0
-    }
+      {
+          "time": 0,
+          "value": [0]
+      },
+      {
+          "time": 8,
+          "value":[10]
+      },
+      {
+          "time": 16,
+          "value": [10]
+      },
+      {
+          "time": 24,
+          "value": [0]
+      }
+  ],
+  "cost_split_profile_no_tes": [
+          {
+          "time": 0,
+          "value": [0]
+      },
+      {
+          "time": 8,
+          "value":[10]
+      },
+      {
+          "time": 16,
+          "value": [10]
+      },
+      {
+          "time": 24,
+          "value": [0]
+      }
+  ],
+  "cost_split_profile": [
+          {
+          "time": 0,
+          "value": [0]
+      },
+      {
+          "time": 8,
+          "value":[10]
+      },
+      {
+          "time": 16,
+          "value": [10]
+      },
+      {
+          "time": 24,
+          "value": [0]
+      }
   ]
 }
