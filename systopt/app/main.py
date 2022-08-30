@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from app.optimization import ctes_values, opt_mini
 from app.clients.webapi import api_client
@@ -70,40 +69,32 @@ def main():
     tes_output = TesOutput.parse_raw(json.dumps(M_report))
 
     # TODO: Prepare data for Web backend
-    profiles = []
-    for [item_ind, item] in enumerate(no_ctes_chiller_optimization.chiller_profiles['load_split_profile']):
-        
-        profiles_dict = {}
-        profiles_dict['time'] = item['time']
-        profiles_dict['load_split_profile_no_tes'] = item['value']
-        profiles_dict['load_split_profile'] = ctes_chiller_optimization.chiller_profiles['load_split_profile'][item_ind]['value']
-        profiles_dict["electric_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
-        profiles_dict["electric_split_profile"] = ctes_chiller_optimization.chiller_profiles['electric_split_profile'][item_ind]['value']
-        profiles_dict["cost_split_profile_no_tes"] = no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
-        profiles_dict["cost_split_profile"] = ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
 
-        profiles.append(profiles_dict)
-
-
-    results = {"result_data": {
-                                "tes_type": tes_output.tes_type,
-                                "tes_attr": tes_output.tes_attr,
-                                "tes_op_attr": tes_output.tes_op_attr,
-                                "chiller": ctes_chiller_optimization.chiller_models,
-                                "chiller_no_tes": no_ctes_chiller_optimization.chiller_models,
-                                "capex": ctes_chiller_optimization.chiller_CAPEX,
-                                "capex_no_tes": no_ctes_chiller_optimization.chiller_CAPEX,
-                                "lcos": ctes_chiller_optimization.chiller_LCOC,
-                                "lcos_no_tes": no_ctes_chiller_optimization.chiller_LCOC,
-                                "htf": tes_output.htf,
-                                "htf_attr": tes_output.htf_attr,
-                                "material": tes_output.material,
-                                "material_attr": tes_output.material_attr,
-                                "tes_capex": tes_output.capex,
-                                "tes_lcos": tes_output.lcos,
-                                "runtime": tes_output.runtime 
-                            },
-            "profiles": profiles
+    results = {
+        "result_data": {
+            "tes_type": tes_output.tes_type,
+            "tes_attr": tes_output.tes_attr,
+            "tes_op_attr": tes_output.tes_op_attr,
+            "chiller": ctes_chiller_optimization.chiller_models,
+            "chiller_no_tes": no_ctes_chiller_optimization.chiller_models,
+            "capex": ctes_chiller_optimization.chiller_CAPEX,
+            "capex_no_tes": no_ctes_chiller_optimization.chiller_CAPEX,
+            "lcos": ctes_chiller_optimization.chiller_LCOC,
+            "lcos_no_tes": no_ctes_chiller_optimization.chiller_LCOC,
+            "htf": tes_output.htf,
+            "htf_attr": tes_output.htf_attr,
+            "material": tes_output.material,
+            "material_attr": tes_output.material_attr,
+            "tes_capex": tes_output.capex,
+            "tes_lcos": tes_output.lcos,
+            "runtime": tes_output.runtime 
+        },
+        "load_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['load_split_profile'],
+        "load_split_profile": ctes_chiller_optimization.chiller_profiles['load_split_profile'],
+        "electric_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
+        "electric_split_profile": ctes_chiller_optimization.chiller_profiles['electric_split_profile'],
+        "cost_split_profile_no_tes": no_ctes_chiller_optimization.chiller_profiles['cost_split_profile'],
+        "cost_split_profile": ctes_chiller_optimization.chiller_profiles['cost_split_profile']
     }
     return results
 

@@ -1,8 +1,11 @@
+from app.schemas.case_pls import CaseData
 from httpx import Client, Response, HTTPError
 import typing as t
 import json
 
 from app.clients.m_result import M_DATA_RESULT
+from app.clients.m_data import M_DATA_2
+from app.config.config import settings
 
 class WebApiClientError(Exception):
     def __init__(self, message: str, raw_response: t.Optional[Response] = None):
@@ -19,7 +22,7 @@ class BearerAuth:
         yield request
 
 class WebApiClient:
-    base_url: str = "http://localhost:8001/api/v1"
+    base_url: str = settings.WEB_API_URL
     base_error: t.Type[WebApiClientError] = WebApiClientError
 
     def __init__(self) -> None:
@@ -85,10 +88,31 @@ class WebApiClient:
 
         return case_params
 
-    def post_result(self, id: int):
+    def post_result(self, id: int, data):
         url = f"/result/app2/{id}"
-        data = json.dumps(M_DATA_RESULT)
+        # data = json.dumps(M_DATA_RESULT)
         response = self._perform_request("post", url, data=data)
         return response
+
+    def get_case_data(self, id) -> CaseData:
+        # get token
+        usr = 'admin@tesapi.com'
+        pwd = 'tes@dmin123'
+        self.get_token(usr, pwd)
         
+        # get data
+        case_params = json.dumps(self.get_case_params(id))
+
+        # return CaseData.parse_raw(case_params)
+        return CaseData.parse_raw(json.dumps(M_DATA_2))
+
+    def post_case_result(self, id: int, data):
+        # get token
+        usr = 'admin@tesapi.com'
+        pwd = 'tes@dmin123'
+        self.get_token(usr, pwd)
+        
+        response = self.post_result(id, data)
+        return response
+
 api_client = WebApiClient()

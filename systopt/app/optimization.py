@@ -48,7 +48,7 @@ class opt_mini:
         models = ' '.join(list(lowest_chiller_models))
         chiller_profiles = chillprof(df_curves, lowest_chiller_models, p_profile).prof()
         powercalc = chiller_profiles.loc[chiller_profiles['type'] == 'input_power']
-        max_power = powercalc[powercalc.select_dtypes(include=['number']).columns].sum().max()
+        self.max_power = powercalc[powercalc.select_dtypes(include=['number']).columns].sum().max()
         
         # Tariff Profile
         tariff_profile = tariffcalc(country_data, p_profile).tariffprofile()
@@ -67,7 +67,7 @@ class opt_mini:
                 'chiller_LCOC': round(chiller_lcoc, 2),
                 'currency': currency,
                 'p_profile': p_profile,
-                'max_power': max_power
+                'max_power': self.max_power
                 }
 
         results = SimpleNamespace(**res)
