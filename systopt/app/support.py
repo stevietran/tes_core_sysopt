@@ -1,14 +1,13 @@
 import warnings
-import math
 import pandas as pd
 import numpy as np
 import numpy_financial as npf
+
 from scipy.integrate import trapezoid
 from scipy.optimize import basinhopping, NonlinearConstraint, differential_evolution
 from app.files.input_files import chiller_file_dir, global_data_dir, load_profile_dir
-from app.schemas.result_pls import ElectricSplitProfileBase
 
-# Area under curve
+# Class for area under curve
 class areaUnder:
     def __init__(self, profile):
         self.profile = profile
@@ -16,17 +15,17 @@ class areaUnder:
     def curve(self):
         return float(trapezoid(self.profile))
 
-# Import data
+# Class for extracting data from csv files
 class dataimport:
     def __init__(self, country_sel, load_sel):
         self.country_sel = country_sel
         self.load_sel = load_sel
     
     def seldata(self):
-        chiller_cost_factor = 137.04 #SGD/kW must use database as this factor will clearly calculate capex proportionally to kW
+        chiller_cost_factor = 99.52 #USD/kW must use database as this factor will clearly calculate capex proportionally to kW
 
-        df_load = pd.read_csv(load_profile_dir)
-        df_global = pd.read_csv(global_data_dir)
+        df_load = pd.read_csv(load_profile_dir) # Read sample load profiles
+        df_global = pd.read_csv(global_data_dir) # Read gloabl informtaion (country's tarriff profile)
         df_curves = pd.read_csv(chiller_file_dir)
 
         country_data = df_global.loc[df_global['country'] == self.country_sel]
@@ -58,10 +57,10 @@ class chargeavail:
         avail_charge = []
         i=0
 
-        for x in self.qload_profile:
+        for x in self.qload_profile: # If the flattend profile is higher than required load, that is available space for charing CTES
             if x < self.flatten_power[i]:
                 avail_charge.append(float(self.flatten_power[i]-x))
-            else:
+            else:   # else there is no space for charing CTES
                 avail_charge.append(0.0)
 
         return float(trapezoid(avail_charge))
@@ -96,7 +95,7 @@ class chillselect:
         x0 = []
         total_power = str()
 
-        def objective_func(split_load, df_curves, cooling_loads):
+        def objective_func(split_load, df_curves, cooling_loads): # Power = f(x) + g(x) + ... + h(x)
             args = df_curves, cooling_loads
             total_power = str()
             i=0
@@ -107,26 +106,26 @@ class chillselect:
             return (eval(total_power))
 
         def constraint1(split_load):
-            return split_load.sum()
+            return split_load.sum() # Sum of all cooling loads distributed across chillers
 
         bnds = list()
         for x in self.df_curves['max_cooling_load']:
             b = (0.0, float(x))
-            bnds.append(b)
+            bnds.append(b) # bounds --> minimum available load = 0 and maximum available load is dependant on the chiller model
 
         for x in range(counter):
-            x0.append(self.oversized_chiller/counter)
+            x0.append(self.oversized_chiller/counter) # Initial values = max cooling load / number of chillers
 
         split_power = []
         model = []
-        nlc = NonlinearConstraint(constraint1, self.oversized_chiller-0.05, self.oversized_chiller)
-        options = {'ftol':1e-50}
+        nlc = NonlinearConstraint(constraint1, self.oversized_chiller-0.05, self.oversized_chiller) # Inequality contraint: max cooling load - 0.05 < sum of distributed load < max cooling load
+        options = {'ftol':1e-50} # Accuracy for minimization before cutting off the optimizer
         minimizer_kwargs = {'args':(self.df_curves, self.oversized_chiller), 'method':'SLSQP', 'constraints':nlc, 'bounds':bnds, 'options':options}
 
-        solution = basinhopping(objective_func, x0, minimizer_kwargs=minimizer_kwargs, niter=200, seed=1, stepsize=0.01)
+        solution = basinhopping(objective_func, x0, minimizer_kwargs=minimizer_kwargs, niter=200, seed=1, stepsize=0.01) # Run basin hopping minimization
         
         split_load = solution.x
-        split_load = [0 if i<0.001 else i for i in split_load]
+        split_load = [0 if i<0.001 else i for i in split_load] # Get rid of zeros to find the chillers that has been distributed a load [3000 0.001 1e-20 3000] --> [3000 3000]
 
         i=0
         for y in self.df_curves['cop_curve']:
@@ -137,7 +136,7 @@ class chillselect:
                 i+=1
 
         i=0
-        for z in split_power:
+        for z in split_power: # Identifying the model names of chillers to be used
             if z > 2.51:
                 temp = self.df_curves['Model'][i]
             else:
@@ -145,7 +144,7 @@ class chillselect:
             model.append(temp)
             i+=1
 
-        model = [i for i in model if i != 0]
+        model = [i for i in model if i != 0] # Get rid of zeros to reduce list size  [chiller1 0 0 chiller2] --> [chiller1 chiller2]
         return model
 
 # Chiller Profiles
@@ -161,7 +160,7 @@ class chillprof:
         total_power = str()
         power_prof = pd.DataFrame()
 
-        def objective_func(split_load, location, cooling_loads):
+        def objective_func(split_load, location, cooling_loads): # Power = f(x) + g(x)
             args = location, cooling_loads
             total_power = str()
             i=0
@@ -172,7 +171,7 @@ class chillprof:
             return (eval(total_power))
 
         def constraint1(split_load):
-            return split_load.sum()
+            return split_load.sum() # Sum of all loads distributed across chillers
 
         for x in self.model:
             temp = self.df_curves.loc[self.df_curves['Model'] == x]
@@ -180,22 +179,21 @@ class chillprof:
             location = pd.concat([location, temp2], ignore_index=True)
 
         bnds = list()
-        for y in location['max_cooling_load']:
+        for y in location['max_cooling_load']: 
             b = (0.0, float(y))
-            bnds.append(b)
+            bnds.append(b) # bounds --> minimum available load = 0 and maximum available load is dependant on the chiller model
 
         for x in self.load_profile:
             split_power = []
             model2 = []
             outtype = []
             cooling_load = self.load_profile[x].values[0]
-            nlc = NonlinearConstraint(constraint1, cooling_load-0.0001, cooling_load)
-            solution = differential_evolution(func=objective_func, bounds=bnds, args=(location, cooling_load), seed=1, constraints=nlc, disp=False)
-
+            nlc = NonlinearConstraint(constraint1, cooling_load-0.0001, cooling_load) # Inequality contraint: max cooling load - 0.0001 < sum of distributed load < max cooling load
+            solution = differential_evolution(func=objective_func, bounds=bnds, args=(location, cooling_load), seed=1, constraints=nlc, disp=False) # Run differential evolution minimization
             split_load = solution.x
 
             i=0
-            for z in location['cop_curve']:
+            for z in location['cop_curve']: # Organize data and take inputs from optimizer: [chiller_1 :{cooling_load[1], input_power[1]}, chiller_2 :{cooling_load[1], input_power[1]}]
                 total_power = z
                 total_power = total_power.replace('[i]','[' + str(i) +']')
                 temp = eval(total_power)
@@ -209,19 +207,19 @@ class chillprof:
                 outtype.append(hold)
                 i+=1
 
-            if x == '0' or x == '0.0':
+            if x == '0' or x == '0.0': # Input first 2 columns as model_names and profile_type
                 temp23 = pd.DataFrame({'model': model2, 'type': 'cooling_load', str(x): split_load})
                 temp24 = pd.concat([temp23, pd.DataFrame({'model': model2, 'type': 'input_power', str(x): split_power})])
-                power_prof = pd.concat([power_prof, temp24], axis=1).round(2)
+                power_prof = pd.concat([power_prof, temp24], axis=1).round(2) 
 
-            else:
+            else: # Fill the rest of the time step after 0000: 0100 0200 0300 ... 2300
                 temp3 = pd.DataFrame({str(x): split_load})
                 temp4 = pd.concat([temp3, pd.DataFrame({str(x): split_power})])
                 power_prof = pd.concat([power_prof, temp4], axis=1).round(2)
 
         power_prof = power_prof.loc[power_prof.sum(axis=1, numeric_only=True) != 0]
             
-        return power_prof
+        return power_prof # Return profile
 
 # generate tariff profile to be used for OPEX calculations
 class tariffcalc:
@@ -231,14 +229,13 @@ class tariffcalc:
     
     def tariffprofile(self):
 
-
         tariff_profile = []
         for i in self.profile:
-            if float(i) < self.country_data['non_peak_end'].values:
+            if float(i) < self.country_data['non_peak_end'].values: # input array (non peak values) 
                 tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
-            elif (float(i) < self.country_data['non_peak_start'].values):
+            elif (float(i) < self.country_data['non_peak_start'].values): # input array (non values) 
                 tariff_profile.append(float(self.country_data['peak_tariff'].values))
-            else:
+            else: # input array (non peak values)
                 tariff_profile.append(float(self.country_data['non_peak_tariff'].values))
         
         return tariff_profile
@@ -252,9 +249,9 @@ class costingprof:
     def costprof(self):
         elec_prof = self.profiles.loc[self.profiles['type'] == 'input_power']
         elec_prof = elec_prof.replace('input_power','energy_cost')
-        elec_cost = elec_prof[elec_prof.select_dtypes(include=['number']).columns].multiply(self.tariff_profile).round(2)
+        elec_cost = elec_prof[elec_prof.select_dtypes(include=['number']).columns].multiply(self.tariff_profile).round(2) # Multiply tariff profile and electricty profile
         elec_cost = pd.concat([elec_prof['model'], elec_prof['type'], elec_cost], axis=1) 
-        chiller_profiles =  pd.concat([self.profiles ,elec_cost])
+        chiller_profiles =  pd.concat([self.profiles ,elec_cost]) # Add in cost profile to the load + electirc profiles
 
         return chiller_profiles
 
@@ -273,21 +270,21 @@ class lcoc:
     
     def cooling(self):
         lifetime = 30 # years
-        discount_rate = 0.05
-        daily_cost_prof = self.profiles.loc[self.profiles['type'] == 'energy_cost']
-        daily_cost_prof = daily_cost_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1)
-        total_annual_cost = np.array([daily_cost_prof.sum()*365]*lifetime)
-        npv_cost = npf.npv(discount_rate, total_annual_cost)
+        discount_rate = 0.05 # discount rate
+        daily_cost_prof = self.profiles.loc[self.profiles['type'] == 'energy_cost'] # Get daily cost profile
+        daily_cost_prof = daily_cost_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1) # Get numbers only
+        total_annual_cost = np.array([daily_cost_prof.sum()*365]*lifetime) # Change to 1 year and array with 30 years
+        npv_cost = npf.npv(discount_rate, total_annual_cost) # Calculate NPV
 
         daily_load_prof = self.profiles.loc[self.profiles['type'] == 'cooling_load']
         daily_load_prof = daily_load_prof.iloc[:, 2:].apply(lambda g: trapezoid(g), axis=1)
-        total_annual_cooling = np.array([daily_load_prof.sum()*365]*lifetime)
-        npv_cooling_load = npf.npv(discount_rate, total_annual_cooling)
-        levelized_cost = (npv_cost/npv_cooling_load)
-
+        total_annual_cooling = np.array([daily_load_prof.sum()*365]*lifetime) # Change to 1 year and array with 30 years
+        npv_cooling_load = npf.npv(discount_rate, total_annual_cooling) # Calculate NPV
+        levelized_cost = (npv_cost/npv_cooling_load) # Levelized coast
+ 
         return levelized_cost
 
-# Clean Data
+# Transfrom pandas data to dictionary after a lot rearranging
 class cleanprofiles:
     def __init__(self, models, profiles):
         self.models = models

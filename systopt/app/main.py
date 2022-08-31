@@ -1,16 +1,12 @@
 import json
-from types import SimpleNamespace
 
 from app.optimization import ctes_values, opt_mini
 from app.clients.webapi import api_client
 from app.schemas.case_pls import CaseData
 from app.schemas.tes_pls import TesOutput
 from app.schemas.result_pls import ResultReturn
-from app.clients.m_data import M_DATA_2
+from app.clients.m_data import M_DATA_1
 from app.clients.m_tesresult import M_report
-from app.clients.m_result import M_DATA_RESULT
-
-from random import randint, random
 
 def get_case_data(id) -> CaseData:
     # get token
@@ -22,35 +18,35 @@ def get_case_data(id) -> CaseData:
     # case_params = json.dumps(api_client.get_case_params(id))
 
     # return CaseData.parse_raw(case_params)
-    return CaseData.parse_raw(json.dumps(M_DATA_2))
+    return CaseData.parse_raw(json.dumps(M_DATA_1))
 
 def main():
     id = 2
-    case_data = get_case_data(id)
-    params = case_data.params
-    load_data = case_data.load_data
-    country_selection = case_data.params.country_selection
+    case_data = get_case_data(id) # Get case data
+    params = case_data.params # Seperate params and load data
+    load_data = case_data.load_data # Seperate params and load data
+    country_selection = case_data.params.country_selection # Seperate country selection
 
     # No CTES chiller optimization
-    no_ctes_chiller_optimization = opt_mini(country_selection, load_data.load_value, params.safety_factor, load_data.load_selection, load_data.load_profiles).minimize()
+    no_ctes_chiller_optimization = opt_mini(country_selection, load_data.load_value, params.safety_factor, load_data.load_selection, load_data.load_profiles).minimize() # no ctes chiller optimiaztion (get chillers and operation strategy)
     
     # Calculate CTES values
-    ctes_pq = ctes_values(no_ctes_chiller_optimization).PQ()
-    p_profile = ctes_pq.flatten_ctes_p_profile
+    ctes_pq = ctes_values(no_ctes_chiller_optimization).PQ() # Get CTES P & Q values
+    p_profile = ctes_pq.flatten_ctes_p_profile # Get load profile with CTES
 
     # CTES chiller optimization
-    ctes_chiller_optimization = opt_mini(country_selection, None, 0, 0, p_profile).minimize()
-    ctes_pump_power = 0.03 * ctes_chiller_optimization.max_power
+    ctes_chiller_optimization = opt_mini(country_selection, None, 0, 0, p_profile).minimize() # Run optimization with CTES flattned profile
+    ctes_pump_power = 0.03 * ctes_chiller_optimization.max_power # Returns power for pump at 3%
     
     # TES values from user, can be hardcoded but shouldn't
-    working_pressure = 1
-    volume_limit = 100
-    T_out_dis = 6.7
-    T_in_charge = T_out_dis - 2
+    working_pressure = 1 # User
+    volume_limit = 100 # User
+    T_out_dis = 12 # User
+    T_in_dis = 5 # User
     
     # Assumed calculation values
-    T_in_dis = 5#
-    T_out_charge = 5#
+    T_in_charge = 6.7 # Chiller minimum
+    T_out_charge = 5 #?
 
     # TES input values
     tes_input = {"working_pressure": working_pressure,
@@ -83,7 +79,6 @@ def main():
         profiles_dict["cost_split_profile"] = ctes_chiller_optimization.chiller_profiles['cost_split_profile'][item_ind]['value']
 
         profiles.append(profiles_dict)
-
 
     results = {"result_data": {
                                 "tes_type": tes_output.tes_type,

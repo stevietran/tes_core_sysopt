@@ -9,7 +9,7 @@ M_DATA_1 = {
     'load_data': {
         'load_type': 'NOMIAL',
         'load_selection': 'ON_HALF_PEAK',
-        'load_value': 3800.0,
+        'load_value': 6000.0,
         'load_profiles': None
     }
 }
